@@ -146,15 +146,15 @@ def admin_dashboard(mall_id):
         total_revenue = result[1] if result[1] else 0.0
         conn.close()
         
-        malls_names = {
+        mall_name = {
             '1': 'Gateway Theatre of Shopping',
             '2': 'Pavilion SHopping Centre',
             '3': 'La Lucia Mall'
         }
-        name = malls_names.get(str(mall_id), "Unknown Mall")
+        name = mall_name.get(str(mall_id), "Unknown Mall")
           
         print(f"\n===============================")
-        print(f" ADMIN DASHBOARD: {malls_names}")
+        print(f" ADMIN DASHBOARD: {mall_name}")
         print(f"===============================")
         print(f"1. View occupancy & revenue report")
         print(f"2. Log out")
@@ -163,7 +163,7 @@ def admin_dashboard(mall_id):
         choice = input("Select an option: ")
 
         if choice == "1":
-            print(f"\n--- Current status for {malls_names} ---")
+            print(f"\n--- Current status for {mall_name} ---")
             print(f"Total vehicles parked: {total_cars}")
             print(f"Total revenue earned: R {total_revenue:.2f}")
             if total_cars > 50:
@@ -190,7 +190,7 @@ def owner_report():
     results = cursor.fetchall()
     conn.close()
 
-    mall_names = {
+    mall_name = {
         '1': 'Gateway Theatre of shopping',
         '2': 'Pavilion Shopping Centre',
         '3': 'La Lucia Mall'
@@ -209,7 +209,7 @@ def owner_report():
         print("No parking records found,")
     else:
         for row in results:
-            m_name = mall_names.get(str(row[0]), "Unknown")
+            m_name = mall_name.get(str(row[0]), "Unknown")
             m_cars = row[1]
             m_rev = row[2] if row[2] else 0.0
 
