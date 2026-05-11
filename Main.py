@@ -36,6 +36,7 @@ def login():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, role, username FROM Users WHERE username=? AND password=?", (username, password))
+    
     user = cursor.fetchone()
     conn.close()
     if user:
@@ -222,6 +223,7 @@ def owner_report():
     print(f"{'TOTAL SYSTEM':<30} | {grand_total_cars:<6} | R{grand_total_revenue:<10.2f}")
     print("="*60)
     input("\nPress enter to return to main menu...")
+
 def main():
     while True:
         print("\n=================================")

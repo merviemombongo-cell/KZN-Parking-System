@@ -21,6 +21,10 @@ def init_db ():
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             role TEXT NOT NULL, -- 'Customer', 'Admin', or 'Owner'
+<<<<<<< HEAD
+=======
+            mall_id INTEGER
+>>>>>>> 34bd824 (Fix login admin details)
             assigned_mall_id INTEFER, -- Only used for admins
             FOREIGN KEY (assigned_mall_id) REFERENCES Malls(mall_id)
         )
