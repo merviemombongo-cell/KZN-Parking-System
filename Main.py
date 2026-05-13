@@ -11,20 +11,37 @@ def register_user():
     print("Select Role: 1. Customer 2. Admin 3. Owner")
     role_choice =input("Choice: ")
 
-    role_map ={"1": "Customer", "2": "Admin", "3": "Owner"}
+    role_map = {"1": "Customer", "2": "Admin", "3": "Owner"}
     role = role_map.get(role_choice, "Customer")
 
-    mall_id = None
-    if role == "Admin":
-        mall_id = input("Enter Mall ID for this Admin (1. Gateway Theatre of Shopping, 2: Pavilion Shopping centre, 3: La Lucia Mall): ")
+    try:
+        mall_id = int(input("""Enter Mall ID for this Admin:
+1. Gateway Theatre of Shopping
+2. Pavilion Shopping centre
+3. La Lucia Mall
+Choice: """))
+        
+    except ValueError:
+        mall_id = None
+        print("Invalid input, defaulting to no mall.")
 
+    if mall_id == 1:
+        mall_name = "Gateway Theatre of Shopping"
+    elif mall_id == 2:
+        mall_name = "Pavilion Shopping centre"
+    elif mall_id == 3:
+        mall_name = "La Lucia Mall"
+    else:
+        mall_name = "Unknown Mall"
+        print("Invalid selection. Please assign a valid Mall ID.")
+ 
     try:
         conn =get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO Users (username, password, role, assigned_mall_id) VALUES (?, ?, ?, ?)", (username, password, role, mall_id))
+        cursor.execute("INSERT INTO Users (username, password, role, mall_id) VALUES (?, ?, ?, ?)", (username, password, role, mall_id))
         conn.commit()
         conn.close()
-        print("Registration successful! You can now log in.")
+        print(f"Registration successful! {role} allocated to {mall_name}.")
     except sqlite3.IntegrityError:
         print("Error: Username already exists.")
 
@@ -35,11 +52,14 @@ def login():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT user_id, role, username FROM Users WHERE username=? AND password=?", (username, password))
+    cursor.execute("SELECT role, mall_id FROM Users WHERE username=? AND password=?", (username, password))
     
     user = cursor.fetchone()
     conn.close()
     if user:
+        role, mall_id = user
+        if role == "Admin":
+            admin_dashboard(mall_id)
         return user
     else:
         print("Invalid username or password.")
@@ -148,14 +168,14 @@ def admin_dashboard(mall_id):
         conn.close()
         
         mall_name = {
-            '1': 'Gateway Theatre of Shopping',
-            '2': 'Pavilion SHopping Centre',
-            '3': 'La Lucia Mall'
+            1: 'Gateway Theatre of Shopping',
+            2: 'Pavilion SHopping Centre',
+            3: 'La Lucia Mall'
         }
-        name = mall_name.get(str(mall_id), "Unknown Mall")
+        name = mall_name.get(int(mall_id), "Unknown Mall")
           
         print(f"\n===============================")
-        print(f" ADMIN DASHBOARD: {mall_name}")
+        print(f" ADMIN DASHBOARD: {name}")
         print(f"===============================")
         print(f"1. View occupancy & revenue report")
         print(f"2. Log out")
@@ -164,7 +184,9 @@ def admin_dashboard(mall_id):
         choice = input("Select an option: ")
 
         if choice == "1":
-            print(f"\n--- Current status for {mall_name} ---")
+            print(f"\n===============================")
+            print(f" Current status for {name}")
+            print(f"===============================")
             print(f"Total vehicles parked: {total_cars}")
             print(f"Total revenue earned: R {total_revenue:.2f}")
             if total_cars > 50:
