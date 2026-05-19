@@ -2,46 +2,59 @@ import sqlite3
 from datetime import datetime
 
 def get_db_connection():
-    return sqlite3.connect('parking_system.db')
+    return sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db")
 
 def register_user():
     print("\n--- Register New Account ---")
     username =input("Enter username: ")
     password =input("Enter password: ")
     print("Select Role: 1. Customer 2. Admin 3. Owner")
-    role_choice =input("Choice: ")
+    role_choice = input("Choice: ")
 
     role_map = {"1": "Customer", "2": "Admin", "3": "Owner"}
     role = role_map.get(role_choice, "Customer")
 
-    try:
-        mall_id = int(input("""Enter Mall ID for this Admin:
+    mall_id = None
+    mall_name = "No Mall (Customer)"
+
+    if role == "Admin":
+        try:
+            mall_id = int(input("""Enter Mall ID for this Admin:
 1. Gateway Theatre of Shopping
 2. Pavilion Shopping centre
 3. La Lucia Mall
 Choice: """))
         
-    except ValueError:
-        mall_id = None
-        print("Invalid input, defaulting to no mall.")
+            if mall_id == 1:
+                mall_name = "Gateway Theatre of Shopping"
+            elif mall_id == 2:
+                mall_name = "Pavilion Shopping centre"
+            elif mall_id == 3:
+                mall_name = "La Lucia Mall"
+            else:
+                mall_name = "Unknown Mall"
+                print("Invalid selection. Please assign a valid Mall ID.")
+    
+        except ValueError:
+            mall_id = None
+            print("Invalid input, defaulting to no mall.")
 
-    if mall_id == 1:
-        mall_name = "Gateway Theatre of Shopping"
-    elif mall_id == 2:
-        mall_name = "Pavilion Shopping centre"
-    elif mall_id == 3:
-        mall_name = "La Lucia Mall"
-    else:
-        mall_name = "Unknown Mall"
-        print("Invalid selection. Please assign a valid Mall ID.")
- 
     try:
         conn =get_db_connection()
         cursor = conn.cursor()
         cursor.execute("INSERT INTO Users (username, password, role, mall_id) VALUES (?, ?, ?, ?)", (username, password, role, mall_id))
+        
         conn.commit()
         conn.close()
-        print(f"Registration successful! {role} allocated to {mall_name}.")
+
+        if role == "Customer":
+            print(f"Registration successful! Account for {username} registered successfully.")
+        elif role == "Admin":
+            print(f"Registration successful! {username} allocated to {mall_name}.")
+        elif role == "Owner":
+            print(f"Registration successful! {username} has access to all three malls.")
+        
+    
     except sqlite3.IntegrityError:
         print("Error: Username already exists.")
 
@@ -52,14 +65,11 @@ def login():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT role, mall_id FROM Users WHERE username=? AND password=?", (username, password))
+    cursor.execute("SELECT user_id, role, mall_id FROM Users WHERE username=? AND password=?", (username, password))
     
     user = cursor.fetchone()
     conn.close()
     if user:
-        role, mall_id = user
-        if role == "Admin":
-            admin_dashboard(mall_id)
         return user
     else:
         print("Invalid username or password.")
@@ -68,41 +78,60 @@ def login():
 def view_customer_history(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    try:
+    
+        cursor.execute("""
+            SELECT mall_id, hours_parked, total_fee, entry_time
+            FROM ParkingRecords
+            WHERE user_id = ?
+            ORDER BY entry_time DESC
+        """, (user_id,))
 
-    cursor.execute("""
-        SELECT mall_id, total_fee, entry_time
-        FROM ParkingRecords
-        WHERE user_id = ?
-        ORDER BY entry_time DESC
-    """, (user_id,))
+        records =  cursor.fetchall()
 
-    records =  cursor.fetchall()
-    if records:
-        print("\n--- Your Parking History ---")
-        for row in records:
-            print(f"Mall ID: {row[0]} | Fee: R{row[1]} | Date: {row[2]}")
-    else:
-        print("No parking history found.")
-    conn.close()
+    except sqlite3.OperationalError as e:
+        print(f"\n[Database Error]: {e}")
+        print("Please ensure your database_setup.py has been run and the tables exist.")
+        conn.close()
+        return    
 
-    print("\n" + "="*70)
-    print(f"{'MALL NAME' :<30} {'FEE':<10} {'DATE & TIME'}")
-    print("-"*70)
+    print("\n" + "="*73)
+    print(" Your Parking History ".center(73))
+    print("="*73)
 
     if not records:
-        print("No transaction found in your account.")
-    else:
-        for row in records:
-            current_mall_id = str(row[0])
-            mall_names = {
-                "1": "Gateway Theatre of Shopping",
-                "2": "Pavilion Shopping centre",
-                "3": "La Lucia Mall",
-            }
-            name = mall_names.get(current_mall_id, "Unknown")
-            print(f"{name:<30} R{row[1]:<9} {row[2]}")
+        print("No parking transactions found in your account.".center(73))
+        print("="*73)
+        return
+    
+    print(f"{'MALL NAME':<32}{'HOURS':<10}{'FEE':<12}{'DATE & TIME'}")
+    print("-"*73)
 
-    print("="*70)
+    mall_names = {
+        "1": "Gateway Theatre of Shopping",
+        "2": "Pavilion Shopping centre",
+        "3": "La Lucia Mall",
+    }
+
+    for row in records:
+        current_mall_id = str(row[0])
+        mall_name = mall_names.get(current_mall_id, f"Mall {current_mall_id}")
+        
+        hours_val = row[1]
+        if isinstance(hours_val, (int, float)):
+            hours = str(int(hours_val))
+        else:
+            hours = "0"
+        
+        fee_val = row[2]
+        fee_display = f"R{fee_val:.2f}" if isinstance(fee_val, (int, float)) else f"R{fee_val}"
+                
+        date_time = row[3] if row[3] is not None else "N/A"
+
+        print(f"{mall_name:<32}{hours:<10}{fee_display:<12}{date_time}")
+                
+    print("="*73)
+    conn.close()
 
 def customer_menu(user_id):
     while True:
@@ -119,24 +148,42 @@ def customer_menu(user_id):
             print("2. Pavilion Shopping centre (Hourly: R10/hr)" )
             print("3. La Lucia Mall (Capped: R15/hr, Max R50)")
             mall_choice =input("choice: ")
-            hours = int(input("How amny hours wiil you be parked? "))
+            hours = int(input("How many hours will you be parked? "))
 
             fee = 0 
-            if mall_choice =="1": fee = 20
-            elif mall_choice == "2": fee = hours *10
-            elif mall_choice == "3": fee = min(hours *15, 50)
+            if mall_choice =="1": 
+                fee = 20
+            elif mall_choice == "2": 
+                fee = hours * 10
+            elif mall_choice == "3": 
+                fee = min(hours * 15, 50)
 
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO ParkingRecords (user_id, mall_id, total_fee, entry_time) VALUES (?, ?, ?, ?)",
-                           (user_id, mall_choice, fee, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                        
-            conn.commit()
-            conn.close()
-            print(f"Success! R{fee} recored.")
-            pass
+            conn = None
+            try:
+                import datetime
+
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+               
+                conn = get_db_connection()
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "INSERT INTO ParkingRecords (user_id, mall_id, total_fee, entry_time, hours_parked) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, mall_choice, fee, current_time, hours)
+                )                      
+                conn.commit()
+                print(f"Success! R{fee} recored.")
+
+            except sqlite3.OperationalError as e:
+                print(f"\n[Database Error] Could not write to disk: {e}")
+                print("Tip: Close DB Browser or any external SQLite extensions and try again.")
+            finally:
+                if conn:
+                    conn.close()    
+
         elif user_selection == "2":
             view_customer_history(user_id)
+
         elif user_selection == "3":
             print("Logging out...")
             break
@@ -174,19 +221,18 @@ def admin_dashboard(mall_id):
         }
         name = mall_name.get(int(mall_id), "Unknown Mall")
           
-        print(f"\n===============================")
+        print(f"\n=============================================")
         print(f" ADMIN DASHBOARD: {name}")
-        print(f"===============================")
+        print(f"=============================================")
         print(f"1. View occupancy & revenue report")
         print(f"2. Log out")
-        print(f"==============================")
 
         choice = input("Select an option: ")
 
         if choice == "1":
-            print(f"\n===============================")
+            print(f"\n===============================================")
             print(f" Current status for {name}")
-            print(f"===============================")
+            print(f"===============================================")
             print(f"Total vehicles parked: {total_cars}")
             print(f"Total revenue earned: R {total_revenue:.2f}")
             if total_cars > 50:
@@ -220,7 +266,7 @@ def owner_report():
     }
 
     print("\n" + "="*60)
-    print("               OWNER OVERVIEW               ")
+    print(" OWNER OVERVIEW ".center(60))
     print("="*60)
     print(f"{'MALL NAME':<30} | {'CARS':<6} | {'REVENUE'}")
     print("="*60)
@@ -261,16 +307,16 @@ def main():
             user = login()
             if user:
                 user_id, role, mall_id = user
-                
                 print(f"\nWelcome back, {role}!")
 
                 if role == "Customer":
                     customer_menu(user_id)
+
                 elif role == "Admin":
                     if mall_id:
                         admin_dashboard(mall_id)
                     else:
-                        print("Error: This Admin has no assigned mall.")
+                        print("\nError: This Admin has no assigned mall. Please contact the owner.")
                 elif role == "Owner":
                     owner_report()
 
@@ -280,7 +326,7 @@ def main():
             print("Goodbye.")
             break
         else:
-            print("Invalid option, pleses try again.")
+            print("Invalid option, please try again.")
 
 if __name__ =="__main__":
     main()

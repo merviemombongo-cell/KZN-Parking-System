@@ -1,8 +1,10 @@
 import sqlite3
 
 def init_db ():
-    conn =sqlite3.connect('parking_system.db')
+    conn =sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db")
     cursor = conn.cursor()
+    
+    cursor.execute("PRAGMA foreign_keys = ON;")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS malls (
@@ -26,7 +28,6 @@ def init_db ():
         )
     ''')
 
-
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ParkingRecords (
             record_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +35,7 @@ def init_db ():
             mall_id INTEGER NOT NULL,
             entry_time DATETIME NOT NULL,
             exit_time DATETIME,
+            hours_parked REAL DEFAULT 0,  
             total_fee REAL DEFAULT 0.0,
             status TEXT DEFAULT 'Active', -- 'Active' means car is still in mall 
             FOREIGN KEY (user_id) REFERENCES Users(user_id),
