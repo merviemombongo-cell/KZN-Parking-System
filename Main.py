@@ -314,48 +314,110 @@ def customer_menu(user_id):
             print("Invaild option.")
 
 def admin_dashboard(mall_id):
-    while True:   
-        conn = get_db_connection()
-        cursor = conn.cursor()
+    mall_capacities = {
+        1: 250,
+        2: 180,
+        3: 150
+    }
+    max_capacity = mall_capacities.get(int(mall_id), 200)
 
-        cursor.execute("""
-           SELECT COUNT(record_id), SUM(total_fee)
-            FROM ParkingRecords
-            WHERE mall_id = ?
-        """, (mall_id,))
-        
-        result = cursor.fetchone()
-        total_cars = result[0] if result[0] else 0
-        total_revenue = result[1] if result[1] else 0.0
-        conn.close()
-        
+    while True:       
         mall_name = {
             1: 'Gateway Theatre of Shopping',
-            2: 'Pavilion SHopping Centre',
+            2: 'Pavilion Shopping Centre',
             3: 'La Lucia Mall'
         }
         name = mall_name.get(int(mall_id), "Unknown Mall")
-          
-        print(f"\n=============================================")
-        print(f" ADMIN DASHBOARD: {name}")
-        print(f"=============================================")
-        print(f"1. View occupancy & revenue report")
-        print(f"2. Log out")
+        short_name = name.split()[0]
 
-        choice = input("Select an option: ")
+        print(f"\nAdmin Menu - {short_name}")
+        print("1 - View Vehicles Currently Parked")
+        print("2 - Monitor Parking Capacity")
+        print("3 - View occupancy & revenue report")
+        print("4 - Logout")
 
+        choice = input("Select an option: ").strip()
+        
         if choice == "1":
-            print(f"\n===============================================")
+            print(f"\n--- Vehicles currently parked @ {short_name} mall ---")
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Users.username, ParkingRecords.entry_time 
+                FROM ParkingRecords
+                JOIN Users ON ParkingRecords.user_id = Users.user_id
+                WHERE ParkingRecords.mall_id = ? AND (ParkingRecords.status IS NULL OR ParkingRecords.status != 'Completed')
+            """, (mall_id,))
+            
+            parked_vehicles = cursor.fetchall()
+            conn.close()
+
+            if not parked_vehicles:
+                print("There is no parked vehicles.")
+            else:
+                for vehicle in parked_vehicles:
+                    username, entry_time = vehicle
+                    print(f"User: {username} | Entry: {entry_time}")
+            
+            input("\nPress enter to continue...")
+
+        elif choice == "2":
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM ParkingRecords 
+                WHERE mall_id = ? AND (status IS NULL OR status != 'Completed')
+            """, (mall_id,))
+            
+            current_vehicles = cursor.fetchone()[0]
+            conn.close()
+            
+            remaining_capacity = max_capacity - current_vehicles
+            
+            print(f"\nCurrent vehicles: {current_vehicles}")
+            print(f"Remaining capacity: {remaining_capacity}")
+            
+            input("\nPress enter to continue...")
+
+        elif choice == "3":
+            import datetime
+            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM ParkingRecords 
+                WHERE mall_id = ? AND entry_time LIKE ?
+            """, (mall_id, f"{today_str}%"))
+            total_entries_today = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT SUM(total_fee) FROM ParkingRecords 
+                WHERE mall_id = ? AND status = 'Completed'
+            """, (mall_id,))
+
+            result_revenue = cursor.fetchone()[0]
+            total_revenue = result_revenue if result_revenue is not None else 0.0
+            conn.close()
+            
+            print(f"\n" + "="*60)
             print(f" Current status for {name}")
-            print(f"===============================================")
-            print(f"Total vehicles parked: {total_cars}")
+            print("="*60)
+            print(f"Total vehicles parked today: {total_entries_today}")
             print(f"Total revenue earned: R {total_revenue:.2f}")
-            if total_cars > 50:
+
+            if total_entries_today > 50:
                 print("STATUS: High occupancy - Monitor exit gates")
             else:
                 print("STATUS: Normal operations")
+            print("="*60)
             input("\nPress enter to continue...")
-        elif choice == "2":
+
+        elif choice == "4":
             print("Logging out of admin session...")
             break
         else:
@@ -366,7 +428,7 @@ def owner_report():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT mall_id, COUNT(record_id), SUM(total_fee)
+        SELECT mall_id, COUNT(record_id), SUM(total_fee), AVG(hours_parked)
         FROM ParkingRecords
         GROUP BY mall_id
     """)
@@ -380,31 +442,47 @@ def owner_report():
         '3': 'La Lucia Mall'
     }
 
-    print("\n" + "="*60)
-    print(" OWNER OVERVIEW ".center(60))
-    print("="*60)
-    print(f"{'MALL NAME':<30} | {'CARS':<6} | {'REVENUE'}")
-    print("="*60)
+    print("\n" + "="*77)
+    print(" OWNER OVERVIEW ".center(77))
+    print("="*77)
+    print(f"{'MALL NAME':<30} | {'VEHICLES':<6} | {'REVENUE':<12} | {'AVG DURATION (HRS)':<18}")
+    print("="*77)
 
     grand_total_revenue = 0
-    grand_total_cars = 0
+    grand_total_vehicles = 0
+    total_hours_sum = 0
 
     if not results:
         print("No parking records found,")
     else:
+        order_map = {'1': None, '2': None, '3': None}
         for row in results:
-            m_name = mall_name.get(str(row[0]), "Unknown")
-            m_cars = row[1]
-            m_rev = row[2] if row[2] else 0.0
+            order_map[str(row[0])] = row
 
-            print(f"{m_name:<30} | {m_cars:<6} | R{m_rev:<10.2f}")
+        for m_id in ['1', '2', '3']:
+            row = order_map[m_id]
+            m_name = mall_name.get(m_id, "Unknown")
+            
+            if row:
+                m_vehicles = row[1]
+                m_rev = row[2] if row[2] else 0.0
+                m_avg_duration = row[3] if row[3] else 0.0
+            else:
+                m_vehicles = 0
+                m_rev = 0.0
+                m_avg_duration = 0.0
+
+            print(f"{m_name:<30} | {m_vehicles:<6} | R{m_rev:<10.2f}| {m_avg_duration:<18.1f}")   
 
             grand_total_revenue += m_rev
-            grand_total_cars += m_cars
+            grand_total_vehicles += m_vehicles
+            total_hours_sum += (m_avg_duration * m_vehicles)
 
-    print("="*60)
-    print(f"{'TOTAL SYSTEM':<30} | {grand_total_cars:<6} | R{grand_total_revenue:<10.2f}")
-    print("="*60)
+    grand_avg_duration = (total_hours_sum / grand_total_vehicles) if grand_total_vehicles > 0 else 0.0          
+   
+    print("="*77)
+    print(f"{'TOTAL SYSTEM':<30} | {grand_total_vehicles:<6} | R{grand_total_revenue:<10.2f}| {grand_avg_duration:<18.1f}")
+    print("="*77)
     input("\nPress enter to return to main menu...")
 
 def main():
