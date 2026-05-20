@@ -1,4 +1,5 @@
 import sqlite3
+import math
 from datetime import datetime
 
 def get_db_connection():
@@ -75,17 +76,16 @@ def login():
         print("Invalid username or password.")
         return None
     
-def view_customer_history(user_id):
+def view_customer_history(user_id, mall_choice):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-    
         cursor.execute("""
-            SELECT mall_id, hours_parked, total_fee, entry_time
+            SELECT mall_id, hours_parked, total_fee, entry_time, exit_time, status
             FROM ParkingRecords
-            WHERE user_id = ?
+            WHERE user_id = ? AND mall_id = ?
             ORDER BY entry_time DESC
-        """, (user_id,))
+        """, (user_id, mall_choice))
 
         records =  cursor.fetchall()
 
@@ -95,17 +95,13 @@ def view_customer_history(user_id):
         conn.close()
         return    
 
-    print("\n" + "="*73)
-    print(" Your Parking History ".center(73))
-    print("="*73)
+    print("\n" + "="*98)
+    print(" Your Parking History ".center(98))
+    print("="*98)
 
-    if not records:
-        print("No parking transactions found in your account.".center(73))
-        print("="*73)
-        return
     
-    print(f"{'MALL NAME':<32}{'HOURS':<10}{'FEE':<12}{'DATE & TIME'}")
-    print("-"*73)
+    print(f"{'MALL NAME':<32}{'HOURS':<10}{'FEE':<12}{'ENTRY TIME':<22}{'EXIT TIME':<19}")
+    print("-"*98)
 
     mall_names = {
         "1": "Gateway Theatre of Shopping",
@@ -113,42 +109,124 @@ def view_customer_history(user_id):
         "3": "La Lucia Mall",
     }
 
+    if not records:
+        print("No parking transactions found in your account.".center(98))
+        print("="*98)
+        return
+
     for row in records:
         current_mall_id = str(row[0])
         mall_name = mall_names.get(current_mall_id, f"Mall {current_mall_id}")
         
         hours_val = row[1]
-        if isinstance(hours_val, (int, float)):
-            hours = str(int(hours_val))
-        else:
-            hours = "0"
-        
+        hours = str(int(hours_val)) if isinstance(hours_val, (int, float)) else "0"
+             
         fee_val = row[2]
-        fee_display = f"R{fee_val:.2f}" if isinstance(fee_val, (int, float)) else f"R{fee_val}"
-                
-        date_time = row[3] if row[3] is not None else "N/A"
+        entry_time = row[3] if row[3] is not None else "N/A"
+        exit_time = row[4] if row[4] is not None else "Still Parked"
+        status_val = row[5]
 
-        print(f"{mall_name:<32}{hours:<10}{fee_display:<12}{date_time}")
+        if status_val != 'Completed':
+            fee_display = "Unpaid"
+        else:
+            fee_display = f"R{fee_val:.2f}" if isinstance(fee_val, (int, float)) else f"R{fee_val}"
+        
+        print(f"{mall_name:<32}{hours:<10}{fee_display:<12}{entry_time:<22}{exit_time:<19}")
                 
-    print("="*73)
+    print("="*98)
     conn.close()
+def pay_outstanding(user_id, mall_choice):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT record_id, total_fee, hours_parked 
+            FROM ParkingRecords 
+            WHERE user_id = ? AND mall_id = ? AND (status IS NULL OR status != 'Completed')
+            ORDER BY entry_time DESC LIMIT 1
+        """, (user_id, mall_choice))
+        
+        record = cursor.fetchone()
+        
+        if not record:
+            print("\nOutstanding balance clean! You have no unpaid records here.")
+            conn.close()
+            return
+            
+        record_id, fee, hours = record
+        
+        print("\n" + "="*50)
+        print("Outstanding Parking Balance".center(50))
+        print("="*50)
+        print(f"Hours Logged: {int(hours)} hrs")
+        print(f"Total Due:    R{fee:.2f}")
+        print("="*50)
+        
+        confirm = input("\nProcess payment for this outstanding fee? (yes/no): ").strip().lower()
+        
+        if confirm == "yes":
+            import datetime
+            current_exit_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("""
+                UPDATE ParkingRecords 
+                SET status = 'Completed', exit_time = ? 
+                WHERE record_id = ?
+            """, (current_exit_time, record_id))
+            
+            conn.commit()
+            print("\nPayment complete! Your history has been updated.")
+        else:
+            print("\nPayment skipped. Record remains unpaid.")
+            
+    except sqlite3.OperationalError as e:
+        print(f"\n[Database Error]: {e}")
+    finally:
+        conn.close()
 
 def customer_menu(user_id):
-    while True:
-        print("\n--- Customer Portal ---")
-        print("1. Park Vechile")
-        print("2. View parking history")
-        print("3. Log out")
+    print("\n--- Select a Mall ---")
+    print("1. Gateway Theatre of Shopping (Flat: R15, Capacity: 250)")
+    print("2. Pavilion Shopping centre (Hourly: R10/hr, Capacity: 180)" )
+    print("3. La Lucia Mall (R12/hr capped at R60, Capacity: 150)")
+    mall_choice =input("choice: ").strip()
 
-        user_selection = input("Select an option: ")
+    mall_names = {
+        "1": "Gateway",
+        "2": "Pavilion",
+        "3": "LaLucia"
+    }
+    selected_mall_name = mall_names.get(mall_choice, "Unknown Mall")
+
+    while True:
+        print(f"\nCustomer Menu - {selected_mall_name}")
+        print("1 - Vehicle Entry")
+        print("2 - Vehicle Exit")
+        print("3 - View History")
+        print("4 - Pay Outstanding")
+        print("5 - Logout")
+
+        user_selection = input("Select an option: ").strip()
 
         if user_selection == "1":
-            print("\n--- Select a Mall ---")
-            print("1. Gateway Theatre of Shopping (Flat rate: R20)")
-            print("2. Pavilion Shopping centre (Hourly: R10/hr)" )
-            print("3. La Lucia Mall (Capped: R15/hr, Max R50)")
-            mall_choice =input("choice: ")
-            hours = int(input("How many hours will you be parked? "))
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM ParkingRecords WHERE mall_id = ? AND status = 'Active'", (mall_choice,))
+            active_count = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT capacity FROM Malls WHERE mall_id = ?", (mall_choice,))
+            mall_cap_row = cursor.fetchone()
+            conn.close()
+            
+            if mall_cap_row and active_count >= mall_cap_row[0]:
+                print("\n[Entry Denied]: The mall has reached full capacity!")
+                continue
+
+            try:
+                hours = int(input("How many hours will you be parked? "))
+            except ValueError:
+                print("Invalid input number. Defaulting to 1 hour.")
+                hours = 1
 
             fee = 0 
             if mall_choice =="1": 
@@ -158,21 +236,19 @@ def customer_menu(user_id):
             elif mall_choice == "3": 
                 fee = min(hours * 15, 50)
 
-            conn = None
             try:
                 import datetime
-
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-               
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  
                 conn = get_db_connection()
                 cursor = conn.cursor()
 
-                cursor.execute(
-                    "INSERT INTO ParkingRecords (user_id, mall_id, total_fee, entry_time, hours_parked) VALUES (?, ?, ?, ?, ?)",
-                    (user_id, mall_choice, fee, current_time, hours)
-                )                      
+                cursor.execute("""
+                    INSERT INTO ParkingRecords (user_id, mall_id, total_fee, entry_time, hours_parked) 
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, mall_choice, fee, current_time, hours))
+                                     
                 conn.commit()
-                print(f"Success! R{fee} recored.")
+                print("\nVehicle entry recorded successfully!")
 
             except sqlite3.OperationalError as e:
                 print(f"\n[Database Error] Could not write to disk: {e}")
@@ -182,21 +258,60 @@ def customer_menu(user_id):
                     conn.close()    
 
         elif user_selection == "2":
-            view_customer_history(user_id)
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT record_id, hours_parked, total_fee 
+                FROM ParkingRecords 
+                WHERE user_id = ? AND mall_id = ? AND status = 'Active'
+                ORDER BY entry_time DESC LIMIT 1
+            """, (user_id, mall_choice))
+            record = cursor.fetchone()
+            
+            if not record:
+                print("\nNo active vehicle entry found for this mall session.")
+                conn.close()
+                continue
+                
+            record_id, hours_parked, total_fee = record
+            conn.close()
+
+            pricing_text = ""
+            if mall_choice == "1":
+                pricing_text = "Flat Rate (R15 per visit) - regardless of duration"
+            elif mall_choice == "2":
+                pricing_text = "Hourly Rate (R10 per hour)"
+            elif mall_choice == "3":
+                pricing_text = "Hourly Rate with Cap (R12 per hour, max R60)"
+                
+            print(f"\nDuration (hours): {int(hours_parked)}")
+            print(f"Pricing Applied: {pricing_text}")
+            print(f"Amount Due: R {int(total_fee)}")
+            
+            confirm = input("Confirm payment (yes/no): ").strip().lower()
+            if confirm == "yes":
+                import datetime
+                current_exit_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                conn = get_db_connection()
+                cursor = conn.cursor()
+
+                cursor.execute("UPDATE ParkingRecords SET status = 'Completed', exit_time = ? WHERE record_id = ?", (current_exit_time, record_id,))
+                conn.commit()
+                conn.close()
+                print("Payment successful! Drive safely.")
+            else:
+                print("Payment pending.")
 
         elif user_selection == "3":
+            view_customer_history(user_id, mall_choice)
+        elif user_selection == "4":
+            pay_outstanding(user_id, mall_choice)
+        elif user_selection == "5":
             print("Logging out...")
             break
         else:
             print("Invaild option.")
-
-def admin_menu():
-    print("\n--- Admin Dashboard ---")
-    print("Functionality: View mall occupancy reports.")
-
-def owner_menu():
-    print("\n--- Owner Dashboard ---")
-    print("Funtionality: Update pricing rates,")
 
 def admin_dashboard(mall_id):
     while True:   
