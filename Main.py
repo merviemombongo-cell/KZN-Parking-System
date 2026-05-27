@@ -5,6 +5,22 @@ from datetime import datetime
 def get_db_connection():
     return sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db")
 
+def get_all_malls_dict():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT mall_id, name FROM malls")
+        malls = {str(row[0]): row[1] for row in cursor.fetchall()}
+    except sqlite3.OperationalError:
+        malls = {
+            "1": "Gateway Theatre of Shopping",
+            "2": "Pavilion Shopping centre",
+            "3": "La Lucia Mall",
+        }
+    finally:
+        conn.close()
+    return malls
+
 def register_user():
     print("\n--- Register New Account ---")
     username =input("Enter username: ")
@@ -20,20 +36,15 @@ def register_user():
 
     if role == "Admin":
         try:
-            mall_id = int(input("""Enter Mall ID for this Admin:
-1. Gateway Theatre of Shopping
-2. Pavilion Shopping centre
-3. La Lucia Mall
-Choice: """))
-        
-            if mall_id == 1:
-                mall_name = "Gateway Theatre of Shopping"
-            elif mall_id == 2:
-                mall_name = "Pavilion Shopping centre"
-            elif mall_id == 3:
-                mall_name = "La Lucia Mall"
-            else:
-                mall_name = "Unknown Mall"
+            mall_names = get_all_malls_dict()
+            print("Enter Mall ID for this Admin:")
+            for m_id, name in mall_names.items():
+                print(f"{m_id}. {name}")
+            
+            mall_id = int(input("Choice: "))
+            mall_name = mall_names.get(str(mall_id), "Unknown Mall")
+            
+            if str(mall_id) not in mall_names:
                 print("Invalid selection. Please assign a valid Mall ID.")
     
         except ValueError:
@@ -103,11 +114,7 @@ def view_customer_history(user_id, mall_choice):
     print(f"{'MALL NAME':<32}{'HOURS':<10}{'FEE':<12}{'ENTRY TIME':<22}{'EXIT TIME':<19}")
     print("-"*98)
 
-    mall_names = {
-        "1": "Gateway Theatre of Shopping",
-        "2": "Pavilion Shopping centre",
-        "3": "La Lucia Mall",
-    }
+    mall_names = get_all_malls_dict()
 
     if not records:
         print("No parking transactions found in your account.".center(98))
@@ -135,6 +142,7 @@ def view_customer_history(user_id, mall_choice):
                 
     print("="*98)
     conn.close()
+
 def pay_outstanding(user_id, mall_choice):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -185,18 +193,60 @@ def pay_outstanding(user_id, mall_choice):
         conn.close()
 
 def customer_menu(user_id):
-    print("\n--- Select a Mall ---")
-    print("1. Gateway Theatre of Shopping (Flat: R15, Capacity: 250)")
-    print("2. Pavilion Shopping centre (Hourly: R10/hr, Capacity: 180)" )
-    print("3. La Lucia Mall (R12/hr capped at R60, Capacity: 150)")
-    mall_choice =input("choice: ").strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT mall_id, name, capacity, pricing_type, rate, max_cap FROM malls")
+        malls_list = cursor.fetchall()
+    except sqlite3.OperationalError:
+        malls_list = []
+    conn.close()
 
-    mall_names = {
-        "1": "Gateway",
-        "2": "Pavilion",
-        "3": "LaLucia"
-    }
-    selected_mall_name = mall_names.get(mall_choice, "Unknown Mall")
+    print("\n--- Select a Mall ---")
+    if not malls_list:
+
+        print("1. Gateway Theatre of Shopping (Flat: R15, Capacity: 250)")
+        print("2. Pavilion Shopping centre (Hourly: R10/hr, Capacity: 180)" )
+        print("3. La Lucia Mall (R12/hr capped at R60, Capacity: 150)")
+        malls_list = [
+            (1, "Gateway Theatre of Shopping", 250, "Flat", 15.0, None),
+            (2, "Pavilion Shopping centre", 180, "Hourly", 10.0, None),
+            (3, "La Lucia Mall", 150, "Capped", 12.0, 60.0)
+        ]
+    else:
+        for row in malls_list:
+            if row[3] == "Flat":
+                pricing_desc = f"Flat: R{int(row[4])}"
+            elif row[3] == "Hourly":
+                pricing_desc = f"Hourly: R{int(row[4])}/hr"
+            else:
+                pricing_desc = f"R{int(row[4])}/hr capped at R{int(row[5])}"
+            print(f"{row[0]}. {row[1]} ({pricing_desc}, Capacity: {row[2]})")
+
+    mall_choice = input("choice: ").strip()
+
+    selected_mall = None
+    for row in malls_list:
+        if str(row[0]) == mall_choice:
+            selected_mall = row
+            break
+
+    if selected_mall:
+        full_mall_name = selected_mall[1]
+        if "La Lucia" in full_mall_name:
+            selected_mall_name = "La Lucia"
+        else:
+            selected_mall_name = full_mall_name.split()[0] 
+        mall_capacity = selected_mall[2]
+        pricing_type = selected_mall[3]
+        rate_val = selected_mall[4]
+        cap_val = selected_mall[5]
+    else:
+        selected_mall_name = "Unknown Mall"
+        mall_capacity = 200
+        pricing_type = "Hourly"
+        rate_val = 10.0
+        cap_val = None
 
     while True:
         print(f"\nCustomer Menu - {selected_mall_name}")
@@ -214,13 +264,11 @@ def customer_menu(user_id):
             cursor.execute("SELECT COUNT(*) FROM ParkingRecords WHERE mall_id = ? AND status = 'Active'", (mall_choice,))
             active_count = cursor.fetchone()[0]
             
-            cursor.execute("SELECT capacity FROM Malls WHERE mall_id = ?", (mall_choice,))
-            mall_cap_row = cursor.fetchone()
-            conn.close()
-            
-            if mall_cap_row and active_count >= mall_cap_row[0]:
+            if active_count >= mall_capacity:
                 print("\n[Entry Denied]: The mall has reached full capacity!")
+                conn.close()
                 continue
+            conn.close()
 
             try:
                 hours = int(input("How many hours will you be parked? "))
@@ -228,23 +276,23 @@ def customer_menu(user_id):
                 print("Invalid input number. Defaulting to 1 hour.")
                 hours = 1
 
-            fee = 0 
-            if mall_choice =="1": 
-                fee = 20
-            elif mall_choice == "2": 
-                fee = hours * 10
-            elif mall_choice == "3": 
-                fee = min(hours * 15, 50)
+            if pricing_type == "Flat":
+                fee = rate_val
+            elif pricing_type == "Hourly":
+                fee = hours * rate_val
+            elif pricing_type == "Capped":
+                fee = min(hours * rate_val, cap_val)
+            else:
+                fee = hours * 10.0
 
             try:
-                import datetime
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  
                 conn = get_db_connection()
                 cursor = conn.cursor()
 
                 cursor.execute("""
-                    INSERT INTO ParkingRecords (user_id, mall_id, total_fee, entry_time, hours_parked) 
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO ParkingRecords (user_id, mall_id, total_fee, entry_time, hours_parked, status) 
+                    VALUES (?, ?, ?, ?, ?, 'Active')
                 """, (user_id, mall_choice, fee, current_time, hours))
                                      
                 conn.commit()
@@ -276,7 +324,7 @@ def customer_menu(user_id):
             record_id, hours_parked, total_fee = record
             conn.close()
 
-            pricing_text = ""
+            pricing_text = f"{pricing_type} Structure Configured Rules Engine"
             if mall_choice == "1":
                 pricing_text = "Flat Rate (R15 per visit) - regardless of duration"
             elif mall_choice == "2":
@@ -290,8 +338,7 @@ def customer_menu(user_id):
             
             confirm = input("Confirm payment (yes/no): ").strip().lower()
             if confirm == "yes":
-                import datetime
-                current_exit_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                current_exit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                 conn = get_db_connection()
                 cursor = conn.cursor()
@@ -314,21 +361,23 @@ def customer_menu(user_id):
             print("Invaild option.")
 
 def admin_dashboard(mall_id):
-    mall_capacities = {
-        1: 250,
-        2: 180,
-        3: 150
-    }
-    max_capacity = mall_capacities.get(int(mall_id), 200)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT capacity, name FROM malls WHERE mall_id = ?", (mall_id,))
+        mall_row = cursor.fetchone()
+        max_capacity = mall_row[0] if mall_row else 200
+        full_name = mall_row[1] if mall_row else "Unknown Mall"
+    except sqlite3.OperationalError:
+        max_capacity = 200
+        full_name = "Unknown Mall"
+    conn.close()
 
-    while True:       
-        mall_name = {
-            1: 'Gateway Theatre of Shopping',
-            2: 'Pavilion Shopping Centre',
-            3: 'La Lucia Mall'
-        }
-        name = mall_name.get(int(mall_id), "Unknown Mall")
-        short_name = name.split()[0]
+    while True:
+        if "La Lucia" in full_name:
+            short_name = "La Lucia"
+        else:      
+            short_name = full_name.split()[0]
 
         print(f"\nAdmin Menu - {short_name}")
         print("1 - View Vehicles Currently Parked")
@@ -405,7 +454,7 @@ def admin_dashboard(mall_id):
             conn.close()
             
             print(f"\n" + "="*60)
-            print(f" Current status for {name}")
+            print(f" Current status for {full_name}")
             print("="*60)
             print(f"Total vehicles parked today: {total_entries_today}")
             print(f"Total revenue earned: R {total_revenue:.2f}")
@@ -436,11 +485,7 @@ def owner_report():
     results = cursor.fetchall()
     conn.close()
 
-    mall_name = {
-        '1': 'Gateway Theatre of shopping',
-        '2': 'Pavilion Shopping Centre',
-        '3': 'La Lucia Mall'
-    }
+    mall_names = get_all_malls_dict()
 
     print("\n" + "="*77)
     print(" OWNER OVERVIEW ".center(77))
@@ -452,16 +497,16 @@ def owner_report():
     grand_total_vehicles = 0
     total_hours_sum = 0
 
-    if not results:
+    if not results and not mall_names:
         print("No parking records found,")
     else:
-        order_map = {'1': None, '2': None, '3': None}
+        order_map = {str(m_id): None for m_id in mall_names.keys()}
         for row in results:
             order_map[str(row[0])] = row
 
-        for m_id in ['1', '2', '3']:
+        for m_id in sorted(mall_names.keys(), key=int):
             row = order_map[m_id]
-            m_name = mall_name.get(m_id, "Unknown")
+            m_name = mall_names.get(m_id, "Unknown")
             
             if row:
                 m_vehicles = row[1]
@@ -472,7 +517,7 @@ def owner_report():
                 m_rev = 0.0
                 m_avg_duration = 0.0
 
-            print(f"{m_name:<30} | {m_vehicles:<6} | R{m_rev:<10.2f}| {m_avg_duration:<18.1f}")   
+            print(f"{m_name:<30} | {m_vehicles:<8} | R{m_rev:<12.2f}| {m_avg_duration:<18.1f}")   
 
             grand_total_revenue += m_rev
             grand_total_vehicles += m_vehicles
@@ -481,7 +526,7 @@ def owner_report():
     grand_avg_duration = (total_hours_sum / grand_total_vehicles) if grand_total_vehicles > 0 else 0.0          
    
     print("="*77)
-    print(f"{'TOTAL SYSTEM':<30} | {grand_total_vehicles:<6} | R{grand_total_revenue:<10.2f}| {grand_avg_duration:<18.1f}")
+    print(f"{'TOTAL SYSTEM':<30} | {grand_total_vehicles:<8} | R{grand_total_revenue:<12.2f}| {grand_avg_duration:<18.1f}")
     print("="*77)
     input("\nPress enter to return to main menu...")
 

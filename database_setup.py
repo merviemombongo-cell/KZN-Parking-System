@@ -24,7 +24,7 @@ def init_db ():
             password TEXT NOT NULL,
             role TEXT NOT NULL, -- 'Customer', 'Admin', or 'Owner'
             mall_id INTEGER, -- Only used for admins
-            FOREIGN KEY (mall_id) REFERENCES Malls(mall_id)
+            FOREIGN KEY (mall_id) REFERENCES malls(mall_id)
         )
     ''')
 
@@ -39,7 +39,7 @@ def init_db ():
             total_fee REAL DEFAULT 0.0,
             status TEXT DEFAULT 'Active', -- 'Active' means car is still in mall 
             FOREIGN KEY (user_id) REFERENCES Users(user_id),
-            FOREIGN KEY (mall_id) REFERENCES Malls(mall_id) 
+            FOREIGN KEY (mall_id) REFERENCES malls(mall_id) 
         ) 
     ''')
     
@@ -50,7 +50,7 @@ def init_db ():
     ]
 
     cursor.executemany('''
-        INSERT OR IGNORE INTO Malls (name, capacity, pricing_type, rate, cap_limit)
+        INSERT OR IGNORE INTO malls (name, capacity, pricing_type, rate, cap_limit)
         VALUES (?, ?, ?, ?, ?)
     ''', malls_data)
 
