@@ -3,7 +3,7 @@ import math
 from datetime import datetime
 
 def get_db_connection():
-    return sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db")
+    return sqlite3.connect("parking_system.db")
 
 def get_all_malls_dict(): #This enables the system to be build in a way that it can be able to add multiple malls. 
     conn = get_db_connection()
