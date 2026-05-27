@@ -5,7 +5,7 @@ from datetime import datetime
 def get_db_connection():
     return sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db")
 
-def get_all_malls_dict():
+def get_all_malls_dict(): #This enables the system to be build in a way that it can be able to add multiple malls. 
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -59,7 +59,7 @@ def register_user():
         conn.commit()
         conn.close()
 
-        if role == "Customer":
+        if role == "Customer": #The following output will execute depending on what role the user picks.
             print(f"Registration successful! Account for {username} registered successfully.")
         elif role == "Admin":
             print(f"Registration successful! {username} allocated to {mall_name}.")
@@ -105,7 +105,8 @@ def view_customer_history(user_id, mall_choice):
         print("Please ensure your database_setup.py has been run and the tables exist.")
         conn.close()
         return    
-
+    
+    #Creates the parking history tables that will be executed once the user decides to view their history 
     print("\n" + "="*98)
     print(" Your Parking History ".center(98))
     print("="*98)
@@ -130,7 +131,7 @@ def view_customer_history(user_id, mall_choice):
              
         fee_val = row[2]
         entry_time = row[3] if row[3] is not None else "N/A"
-        exit_time = row[4] if row[4] is not None else "Still Parked"
+        exit_time = row[4] if row[4] is not None else "Still Parked" #It will say still parked if the user did not exit the mall. 
         status_val = row[5]
 
         if status_val != 'Completed':
@@ -158,12 +159,13 @@ def pay_outstanding(user_id, mall_choice):
         record = cursor.fetchone()
         
         if not record:
-            print("\nOutstanding balance clean! You have no unpaid records here.")
+            print("\nOutstanding balance clean! You have no unpaid records here.") #This executes only if the user has paid.
             conn.close()
             return
             
         record_id, fee, hours = record
-        
+
+        #These lines excutes if the user still has outstanding payment/s. 
         print("\n" + "="*50)
         print("Outstanding Parking Balance".center(50))
         print("="*50)
@@ -185,7 +187,7 @@ def pay_outstanding(user_id, mall_choice):
             conn.commit()
             print("\nPayment complete! Your history has been updated.")
         else:
-            print("\nPayment skipped. Record remains unpaid.")
+            print("\nPayment skipped. Record remains unpaid.") #This will execute only If the user did not complete the payment process. 
             
     except sqlite3.OperationalError as e:
         print(f"\n[Database Error]: {e}")
@@ -233,7 +235,7 @@ def customer_menu(user_id):
 
     if selected_mall:
         full_mall_name = selected_mall[1]
-        if "La Lucia" in full_mall_name:
+        if "La Lucia" in full_mall_name: #This allows the program to execute both words (La and Lucia) while keeping the space in between. 
             selected_mall_name = "La Lucia"
         else:
             selected_mall_name = full_mall_name.split()[0] 
@@ -273,8 +275,8 @@ def customer_menu(user_id):
             try:
                 hours = int(input("How many hours will you be parked? "))
             except ValueError:
-                print("Invalid input number. Defaulting to 1 hour.")
-                hours = 1
+                print("Invalid input number. Defaulting to 1 hour.") #If the user does not enter any number, the program will automatically put 1 (hour). 
+                hours = 1 #The helps the program to still execute even though nothing was entered.
 
             if pricing_type == "Flat":
                 fee = rate_val
@@ -300,7 +302,7 @@ def customer_menu(user_id):
 
             except sqlite3.OperationalError as e:
                 print(f"\n[Database Error] Could not write to disk: {e}")
-                print("Tip: Close DB Browser or any external SQLite extensions and try again.")
+                print("Tip: Close DB Browser or any external SQLite extensions and try again.") #These error messages will show if the values and the colunm are not the same.
             finally:
                 if conn:
                     conn.close()    
@@ -323,10 +325,10 @@ def customer_menu(user_id):
                 
             record_id, hours_parked, total_fee = record
             conn.close()
-
+            
             pricing_text = f"{pricing_type} Structure Configured Rules Engine"
             if mall_choice == "1":
-                pricing_text = "Flat Rate (R15 per visit) - regardless of duration"
+                pricing_text = "Flat Rate (R15 per visit) - regardless of duration" #This shows the mall parking payment methods. 
             elif mall_choice == "2":
                 pricing_text = "Hourly Rate (R10 per hour)"
             elif mall_choice == "3":
@@ -374,7 +376,7 @@ def admin_dashboard(mall_id):
     conn.close()
 
     while True:
-        if "La Lucia" in full_name:
+        if "La Lucia" in full_name: #This also helps to makes sure that both the word La and Lucia is executed. This needs to be done becuase it has two words, if this is not done then it will only execute "La"
             short_name = "La Lucia"
         else:      
             short_name = full_name.split()[0]
@@ -388,7 +390,7 @@ def admin_dashboard(mall_id):
         choice = input("Select an option: ").strip()
         
         if choice == "1":
-            print(f"\n--- Vehicles currently parked @ {short_name} mall ---")
+            print(f"\n--- Vehicles currently parked at {short_name} mall ---")
             
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -410,7 +412,6 @@ def admin_dashboard(mall_id):
                     username, entry_time = vehicle
                     print(f"User: {username} | Entry: {entry_time}")
             
-            input("\nPress enter to continue...")
 
         elif choice == "2":
             conn = get_db_connection()
@@ -429,7 +430,6 @@ def admin_dashboard(mall_id):
             print(f"\nCurrent vehicles: {current_vehicles}")
             print(f"Remaining capacity: {remaining_capacity}")
             
-            input("\nPress enter to continue...")
 
         elif choice == "3":
             import datetime
@@ -464,7 +464,6 @@ def admin_dashboard(mall_id):
             else:
                 print("STATUS: Normal operations")
             print("="*60)
-            input("\nPress enter to continue...")
 
         elif choice == "4":
             print("Logging out of admin session...")
@@ -554,7 +553,7 @@ def main():
                     if mall_id:
                         admin_dashboard(mall_id)
                     else:
-                        print("\nError: This Admin has no assigned mall. Please contact the owner.")
+                        print("\nError: This Admin has no assigned mall. Please contact the owner.") #This error message will exeute only if the user is not registerd to any mall.
                 elif role == "Owner":
                     owner_report()
 

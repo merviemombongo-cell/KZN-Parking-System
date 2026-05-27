@@ -1,7 +1,7 @@
 import sqlite3
-
+#This python file creates the parking system database, which will be where all the data of my program is stored. 
 def init_db ():
-    conn =sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db")
+    conn =sqlite3.connect(r"D:\Richfield _IT\ASSIGNMENTS\KZN Parking System\parking_system.db") #This is where my files are located.
     cursor = conn.cursor()
     
     cursor.execute("PRAGMA foreign_keys = ON;")
